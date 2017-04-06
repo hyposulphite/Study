@@ -2,7 +2,7 @@ library(tm)
 
 #5.1 Tidying a document-term matrix
 #5.1.1 Tidying DocumentTermMatrix objects
-#Get data
+#Get data AssociatedPress from "topicmodels"
 data("AssociatedPress", package = "topicmodels")
 AssociatedPress
 
@@ -76,6 +76,63 @@ year_term_counts %>%
   ylab("% frequency of word in inaugural address")
 
 
+##5.2
+# cast tidy data [ap_td] into dtm/dfm
+ap_td %>%
+  cast_dtm(document, term, count)
+ap_td %>%
+  cast_dfm(term, document, count)
+
+
+# cast into a Matrix object
+m <- ap_td %>%
+  cast_sparse(document, term, count)
+class(m)
+dim(m)
+
+# cast austen_books from <janeaustenr> into dtm
+library(janeaustenr)
+
+austen_dtm <- austen_books() %>%
+  unnest_tokens(word, text) %>%
+  count(book, word) %>%
+  cast_dtm(book, word, n)
+
+austen_dtm
+
+
+##5.3 Tidying corpus objects with metadata
+# get corpus "acq" from <tm>
+data("acq")
+acq
+acq[[1]]
+
+# tidy acq
+acq_td <- tidy(acq)
+acq_td
+
+# tokenize column "text"
+acq_tokens <- acq_td %>%
+  select(-places) %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by = "word")
+
+# most common words
+acq_tokens %>%
+  count(word, sort = TRUE)
+
+# tf-idf
+acq_tokens %>%
+  count(id, word) %>%
+  bind_tf_idf(word, id, n) %>%
+  arrange(desc(tf_idf))
+
+##5.3.1 Example: mining financial articles
 
 
 
+
+
+###
+#Questions:
+# 1. DTM <==> corpus
