@@ -1,4 +1,13 @@
 library(tm)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(methods)
+library(tidyr)
+library(stringr)
+library(janeaustenr)
+library(tm.plugin.webmining)
+library(purrr)
 
 #5.1 Tidying a document-term matrix
 #5.1.1 Tidying DocumentTermMatrix objects
@@ -11,8 +20,7 @@ terms <- Terms(AssociatedPress)
 head(terms)
 
 #transform matrix into one-token-per-document-per-row format
-library(dplyr)
-library(tidytext)
+
 
 ap_td <- tidy(AssociatedPress)
 ap_td
@@ -24,7 +32,7 @@ ap_sentiments <- ap_td %>%
 ap_sentiments
 
 #Visualize most positive and most negative words
-library(ggplot2)
+
 
 ap_sentiments %>%
   count(sentiment, term, wt = count) %>%
@@ -39,7 +47,7 @@ ap_sentiments %>%
 
 #5.1.2 Tidying dfm objects
 
-library(methods)
+
 
 #get data data_corpus_inaugural from <quanteda>
 data("data_corpus_inaugural", package = "quanteda")
@@ -58,7 +66,7 @@ inaug_tf_idf <- inaug_td %>%
 inaug_tf_idf
 
 #pick several words and visualize how they changed in frequency over time
-library(tidyr)
+
 
 year_term_counts <- inaug_td %>%
   extract(document, "year", "(\\d+)", convert = TRUE) %>%
@@ -91,7 +99,7 @@ class(m)
 dim(m)
 
 # cast austen_books from <janeaustenr> into dtm
-library(janeaustenr)
+
 
 austen_dtm <- austen_books() %>%
   unnest_tokens(word, text) %>%
@@ -128,6 +136,89 @@ acq_tokens %>%
   arrange(desc(tf_idf))
 
 ##5.3.1 Example: mining financial articles
+
+
+company <- c("Microsoft", "Apple", "Google", "Amazon", "Facebook",
+             "Twitter", "IBM", "Yahoo", "Netflix")
+symbol <- c("MSFT", "AAPL", "GOOG", "AMZN", "FB", "TWTR", "IBM", "YHOO", "NFLX")
+
+download_articles <- function(symbol) {
+  WebCorpus(GoogleFinanceSource(paste0("NASDAQ:", symbol)))
+}
+
+#get all articles. One corpus per row
+stock_articles <- data_frame(company = company,
+                             symbol = symbol) %>%
+  mutate(corpus = map(symbol, download_articles))
+
+stock_articles
+
+#get all words from each corpus
+# select: company, datetimestamp, word, id, heading
+stock_tokens <- stock_articles %>%
+  unnest(map(corpus, tidy)) %>%
+  unnest_tokens(word, text) %>%
+  select(company, datetimestamp, word, id, heading)
+
+stock_tokens
+
+#get tf_idf by company
+stock_tf_idf <- stock_tokens %>%
+  count(company, word) %>%
+  filter(!str_detect(word, "\\d+")) %>%
+  bind_tf_idf(word, company, n) %>%
+  arrange(-tf_idf)
+# and try to plot the words by company, ordered by tf_idf
+
+
+#sentiment analysis: get strongest words from stock_tokens
+# sentiment: afinn
+stock_tokens %>%
+  anti_join(stop_words, by = "word") %>%
+  count(word, id, sort = TRUE) %>%
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  group_by(word) %>%
+  summarize(contribution = sum(n * score),
+            abscontribution = abs(contribution)) %>%
+  top_n(12, abscontribution) %>%
+  mutate(word = reorder(word, contribution)) %>%
+  ggplot(aes(word, contribution)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = "Frequency of word * AFINN score")
+
+
+#sentiment: loughran
+stock_tokens %>%
+  count(word) %>%
+  inner_join(get_sentiments("loughran"), by = "word") %>%
+  group_by(sentiment) %>%
+  top_n(5, n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ sentiment, scales = "free") +
+  ylab("Frequency of this word in the recent financial articles")
+
+
+stock_sentiment_count <- stock_tokens %>%
+  inner_join(get_sentiments("loughran"), by = "word") %>%
+  count(sentiment, company) %>%
+  spread(sentiment, n, fill = 0)
+
+stock_sentiment_count
+
+stock_sentiment_count %>%
+  mutate(score = (positive - negative) / (positive + negative)) %>%
+  mutate(company = reorder(company, score)) %>%
+  ggplot(aes(company, score, fill = score > 0)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(x = "Company",
+       y = "Positivity score among 20 recent news articles")
+
 
 
 
