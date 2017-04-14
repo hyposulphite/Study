@@ -5,6 +5,7 @@ library(dplyr)
 library(gutenbergr)
 library(stringr)
 library(tidyr)
+library(scales)
 
 #get data AssociatedPress
 data("AssociatedPress")
@@ -141,7 +142,7 @@ top_terms %>%
 chapters_gamma <- tidy(chapters_lda, matrix = "gamma")
 chapters_gamma
 
-#
+#summarize gamma by book and topic and do classification
 chapters_gamma <- chapters_gamma %>%
   separate(document, c("title", "chapter"), sep = "_", convert = TRUE)
 chapters_gamma
@@ -152,9 +153,68 @@ chapters_gamma %>%
   geom_boxplot() +
   facet_wrap(~ title)
 
+#check the cases of misclassification
+chapter_classifications <- chapters_gamma %>%
+  group_by(title, chapter) %>%
+  top_n(1, gamma) %>%
+  ungroup()
+
+chapter_classifications
+
+book_topics <- chapter_classifications %>%
+  count(title, topic) %>%
+  group_by(title) %>%
+  top_n(1, n) %>%
+  ungroup() %>%
+  transmute(consensus = title, topic)
+
+chapter_classifications %>%
+  inner_join(book_topics, by = "topic") %>%
+  filter(title != consensus)
+
+##6.2.3 By word assignments: augment
+
+#assign words in chapters_lda into each topic
+assignments <- augment(chapters_lda, data = chapters_dtm)
+assignments
+
+#check correctness of assignments
+assignments <- assignments %>%
+  separate(document, c("title", "chapter"), sep = "_", convert = TRUE) %>%
+  inner_join(book_topics, by = c(".topic" = "topic"))
+
+assignments
+
+#plot confusion matrix: how often the misclassification
+assignments %>%
+  count(title, consensus, wt = count) %>%
+  group_by(title) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(aes(consensus, title, fill = percent)) +
+  geom_tile() +
+  scale_fill_gradient2(high = "red", label = percent_format()) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        panel.grid = element_blank()) +
+  labs(x = "Book words were assigned to",
+       y = "Book words came from",
+       fill = "% of assignments")
+
+#research on the wrong words
+
+wrong_words <- assignments %>%
+  filter(title != consensus)
+
+wrong_words %>%
+  count(title, consensus, term, wt = count) %>%
+  ungroup() %>%
+  arrange(desc(n))
+
+word_counts %>%
+  filter(word == "flopson")
 
 
-
+wrong_words
 
 
 
