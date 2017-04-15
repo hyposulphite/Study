@@ -1,145 +1,228 @@
+##5.1 Tokenizing by n-gram
+
 library(dplyr)
-library(janeaustenr)
 library(tidytext)
-library(ggplot2)
+library(janeaustenr)
+library(tidyr)
 
-book_words <- austen_books() %>%
-  unnest_tokens(word, text) %>%
-  count(book, word, sort = TRUE) %>%
-  ungroup()
+austen_bigrams <- austen_books() %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
 
-total_words <- book_words %>% 
-  group_by(book) %>% 
-  summarize(total = sum(n))
+austen_bigrams
 
-book_words <- left_join(book_words, total_words)
+#5.1.1 Counting and filtering n-grams
 
-book_words
+austen_bigrams %>% count(bigram, sort = TRUE)
 
 
 
-ggplot(book_words, aes(n/total, fill = book)) +
-  geom_histogram(show.legend = FALSE) +
-  xlim(NA, 0.0009) +
-  facet_wrap(~book, ncol = 2, scales = "free_y")
+bigrams_separated <- austen_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+bigrams_filtered <- bigrams_separated %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)
+
+# new bigram counts:
+bigram_counts <- bigrams_filtered %>% 
+  count(word1, word2, sort = TRUE)
+
+bigram_counts
+
+bigrams_united <- bigrams_filtered %>%
+  unite(bigram, word1, word2, sep = " ")
+
+bigrams_united
 
 
-###4.2 Zipf's law
-freq_by_rank <- book_words %>% 
-  group_by(book) %>% 
-  mutate(rank = row_number(), 
-         `term frequency` = n/total)
+austen_books() %>%
+  unnest_tokens(trigram, text, token = "ngrams", n = 3) %>%
+  separate(trigram, c("word1", "word2", "word3"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word,
+         !word3 %in% stop_words$word) %>%
+  count(word1, word2, word3, sort = TRUE)
 
-freq_by_rank
+#5.1.2 Analyzing bigrams
+bigrams_filtered %>%
+  filter(word2 == "street") %>%
+  count(book, word1, sort = TRUE)
 
-freq_by_rank %>% 
-  ggplot(aes(rank, `term frequency`, color = book)) + 
-  geom_line(size = 1.2, alpha = 0.8) + 
-  scale_x_log10() +
-  scale_y_log10()
-
-rank_subset <- freq_by_rank %>% 
-  filter(rank < 500,
-         rank > 10)
-
-lm(log10(`term frequency`) ~ log10(rank), data = rank_subset)
-
-freq_by_rank %>% 
-  ggplot(aes(rank, `term frequency`, color = book)) + 
-  geom_abline(intercept = -0.62, slope = -1.1, color = "gray50", linetype = 2) +
-  geom_line(size = 1.2, alpha = 0.8) + 
-  scale_x_log10() +
-  scale_y_log10()
-
-###4.3 The bind_tf_idf function
-
-book_words <- book_words %>%
-  bind_tf_idf(word, book, n)
-book_words
-
-book_words %>%
-  select(-total) %>%
+bigram_tf_idf <- bigrams_united %>%
+  count(book, bigram) %>%
+  bind_tf_idf(bigram, book, n) %>%
   arrange(desc(tf_idf))
 
-plot_austen <- book_words %>%
-  arrange(desc(tf_idf)) %>%
-  mutate(word = factor(word, levels = rev(unique(word))))
+bigram_tf_idf
 
-ggplot(plot_austen[1:20,], aes(word, tf_idf, fill = book)) +
-  geom_bar(stat = "identity") +
-  labs(x = NULL, y = "tf-idf") +
-  coord_flip()
+#5.1.3 Using bigrams to provide context in sentiment analysis
+bigrams_separated %>%
+  filter(word1 == "not") %>%
+  count(word1, word2, sort = TRUE)
 
-plot_austen <- plot_austen %>% 
-  group_by(book) %>% 
-  top_n(15) %>% 
-  ungroup
+AFINN <- get_sentiments("afinn")
 
-ggplot(plot_austen, aes(word, tf_idf, fill = book)) +
-  geom_bar(stat = "identity", show.legend = FALSE) +
-  labs(x = NULL, y = "tf-idf") +
-  facet_wrap(~book, ncol = 2, scales = "free") +
-  coord_flip()
+AFINN
 
-###4.4 A corpus of physics texts
-
-library(gutenbergr)
-physics <- gutenberg_download(c(37729, 14725, 13476, 5001), meta_fields = "author")
-
-
-physics_words <- physics %>%
-  unnest_tokens(word, text) %>%
-  count(author, word, sort = TRUE) %>%
+not_words <- bigrams_separated %>%
+  filter(word1 == "not") %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word2, score, sort = TRUE) %>%
   ungroup()
 
-physics_words
+not_words
 
-physics_words <- physics_words %>%
-  bind_tf_idf(word, author, n) 
+not_words %>%
+  mutate(contribution = n * score) %>%
+  arrange(desc(abs(contribution))) %>%
+  head(20) %>%
+  mutate(word2 = reorder(word2, contribution)) %>%
+  ggplot(aes(word2, n * score, fill = n * score > 0)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  xlab("Words preceded by \"not\"") +
+  ylab("Sentiment score * number of occurrences") +
+  coord_flip()
 
-plot_physics <- physics_words %>%
-  arrange(desc(tf_idf)) %>%
-  mutate(word = factor(word, levels = rev(unique(word)))) %>%
-  mutate(author = factor(author, levels = c("Galilei, Galileo",
-                                            "Huygens, Christiaan", 
-                                            "Tesla, Nikola",
-                                            "Einstein, Albert")))
+negation_words <- c("not", "no", "never", "without")
 
-ggplot(plot_physics[1:20,], aes(word, tf_idf, fill = author)) +
+negated_words <- bigrams_separated %>%
+  filter(word1 %in% negation_words) %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word1, word2, score, sort = TRUE) %>%
+  ungroup()
+
+#5.1.4 Visualizing a network of bigrams with igraph
+library(igraph)
+
+# original counts
+bigram_counts
+
+# filter for only relatively common combinations
+bigram_graph <- bigram_counts %>%
+  filter(n > 20) %>%
+  graph_from_data_frame()
+
+bigram_graph
+
+library(ggraph)
+set.seed(2017)
+
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+
+
+set.seed(2016)
+
+a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, arrow = a) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+
+
+###
+count_bigrams <- function(dataset) {
+  dataset %>%
+    unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+    separate(bigram, c("word1", "word2"), sep = " ") %>%
+    filter(!word1 %in% stop_words$word,
+           !word2 %in% stop_words$word) %>%
+    count(word1, word2, sort = TRUE)
+}
+
+visualize_bigrams <- function(bigrams) {
+  set.seed(2016)
+  a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+  
+  bigrams %>%
+    graph_from_data_frame() %>%
+    ggraph(layout = "fr") +
+    geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, arrow = a) +
+    geom_node_point(color = "lightblue", size = 5) +
+    geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+    theme_void()
+}
+
+# the King James version is book 10 on Project Gutenberg:
+library(gutenbergr)
+kjv <- gutenberg_download(10)
+library(stringr)
+
+kjv_bigrams <- kjv %>%
+  count_bigrams()
+
+# filter out rare combinations, as well as digits
+kjv_bigrams %>%
+  filter(n > 40,
+         !str_detect(word1, "\\d"),
+         !str_detect(word2, "\\d")) %>%
+  visualize_bigrams()
+
+###5.2 Counting and correlating pairs of words with the widyr package
+#5.2.1 Counting and correlating among sections
+austen_section_words <- austen_books() %>%
+  filter(book == "Pride & Prejudice") %>%
+  mutate(section = row_number() %/% 10) %>%
+  filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word)
+
+austen_section_words
+
+library(widyr)
+
+# count words co-occuring within sections
+word_pairs <- austen_section_words %>%
+  pairwise_count(word, section, sort = TRUE)
+
+word_pairs
+
+word_pairs %>%
+  filter(item1 == "darcy")
+
+#5.2.2 Pairwise correlation
+library(widyr)
+
+# we need to filter for at least relatively common words first
+word_cors <- austen_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 20) %>%
+  pairwise_cor(word, section, sort = TRUE)
+
+word_cors
+
+word_cors %>%
+  filter(item1 == "pounds")
+
+word_cors %>%
+  filter(item1 %in% c("elizabeth", "pounds", "married", "pride")) %>%
+  group_by(item1) %>%
+  top_n(6) %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(aes(item2, correlation)) +
   geom_bar(stat = "identity") +
-  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~ item1, scales = "free") +
   coord_flip()
 
-plot_physics <- plot_physics %>% 
-  group_by(author) %>% 
-  top_n(15, tf_idf) %>% 
-  mutate(word = reorder(word, tf_idf))
+set.seed(2016)
 
-ggplot(plot_physics, aes(word, tf_idf, fill = author)) +
-  geom_bar(stat = "identity", show.legend = FALSE) +
-  labs(x = NULL, y = "tf-idf") +
-  facet_wrap(~author, ncol = 2, scales = "free") +
-  coord_flip()
+word_cors %>%
+  filter(correlation > .15) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
 
-mystopwords <- data_frame(word = c("eq", "co", "rc", "ac", "ak", "bn", 
-                                   "fig", "file", "cg", "cb", "cm"))
-physics_words <- anti_join(physics_words, mystopwords, by = "word")
-plot_physics <- physics_words %>%
-  arrange(desc(tf_idf)) %>%
-  mutate(word = factor(word, levels = rev(unique(word)))) %>%
-  group_by(author) %>% 
-  top_n(15, tf_idf) %>%
-  ungroup %>%
-  mutate(author = factor(author, levels = c("Galilei, Galileo",
-                                            "Huygens, Christiaan",
-                                            "Tesla, Nikola",
-                                            "Einstein, Albert")))
 
-ggplot(plot_physics, aes(word, tf_idf, fill = author)) +
-  geom_bar(stat = "identity", show.legend = FALSE) +
-  labs(x = NULL, y = "tf-idf") +
-  facet_wrap(~author, ncol = 2, scales = "free") +
-  coord_flip()
+
+
+
 
 
 

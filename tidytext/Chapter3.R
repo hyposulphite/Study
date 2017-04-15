@@ -1,206 +1,145 @@
 library(dplyr)
-library(tidytext)
 library(janeaustenr)
-library(stringr)
+library(tidytext)
 library(ggplot2)
-library(tidyr)
-library(wordcloud)
-library(reshape2)
 
-###########################
-### Chapter 3
-sentiments
-
-sentiments %>% count(lexicon)
-
-sentiments %>% count(lexicon, word) %>% 
-  count(lexicon)
-
-sentiments %>% group_by(lexicon) %>% summarise(Unique_Elements = n_distinct(word))
-
-
-get_sentiments("afinn")
-
-get_sentiments("bing")
-
-get_sentiments("nrc")
-
-
-###3.2 Sentiment analysis with inner join
-
-
-tidy_books <- austen_books() %>%
-  group_by(book) %>%
-  mutate(linenumber = row_number(),
-         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", 
-                                                 ignore_case = TRUE)))) %>%
-  ungroup() %>%
-  unnest_tokens(word, text)
-
-#################
-#################
-tidy_books1 <- austen_books() %>%
-  group_by(book) %>%
-  mutate(linenumber = row_number(),
-         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", 
-                                                 ignore_case = TRUE)))) %>%
-  unnest_tokens(word, text)
-
-#
-
-nrcjoy <- get_sentiments("nrc") %>% 
-  filter(sentiment == "joy")
-
-tidy_books %>%
-  filter(book == "Emma") %>%
-  inner_join(nrcjoy) %>%
-  count(word, sort = TRUE)
-
-## An example of gather and spread
-
-stocks <- data.frame(
-  time = as.Date('2009-01-01') + 0:9,
-  X = rnorm(10, 0, 1),
-  Y = rnorm(10, 0, 2),
-  Z = rnorm(10, 0, 4)
-)
-stocksm <- stocks %>% gather(stock, price, -time)
-stocksm %>% spread(stock, price)
-stocksm %>% spread(time, price)
-
-#
-janeaustensentiment <- tidy_books %>%
-  inner_join(get_sentiments("bing")) %>%
-  count(book, index = linenumber %/% 100, sentiment) %>%
-  spread(sentiment, n, fill = 0) %>%
-  mutate(sentiment = positive - negative)
-
-ggplot(janeaustensentiment, aes(index, sentiment, fill = book)) +
-  geom_bar(stat = "identity", show.legend = FALSE) +
-  facet_wrap(~book, ncol = 2, scales = "free_x")
-
-
-###3.3 Comparing the three sentiment dictionaries
-
-pride_prejudice <- tidy_books %>% 
-  filter(book == "Pride & Prejudice")
-
-pride_prejudice
-
-afinn <- pride_prejudice %>% 
-  inner_join(get_sentiments("afinn")) %>% 
-  group_by(index = linenumber %/% 80) %>% 
-  summarise(sentiment = sum(score)) %>% 
-  mutate(method = "AFINN")
-
-bing_and_nrc <- bind_rows(pride_prejudice %>% 
-                            inner_join(get_sentiments("bing")) %>%
-                            mutate(method = "Bing et al."),
-                          pride_prejudice %>% 
-                            inner_join(get_sentiments("nrc") %>% 
-                                         filter(sentiment %in% c("positive", 
-                                                                 "negative"))) %>%
-                            mutate(method = "NRC")) %>%
-  count(method, index = linenumber %/% 80, sentiment) %>%
-  spread(sentiment, n, fill = 0) %>%
-  mutate(sentiment = positive - negative)
-
-
-bind_rows(afinn, 
-          bing_and_nrc) %>%
-  ggplot(aes(index, sentiment, fill = method)) +
-  geom_bar(stat = "identity", show.legend = FALSE) +
-  facet_wrap(~method, ncol = 1, scales = "free_y")
-
-get_sentiments("nrc") %>% 
-  filter(sentiment %in% c("positive", 
-                          "negative")) %>% 
-  count(sentiment)
-
-get_sentiments("bing") %>% 
-  count(sentiment)
-
-###3.4 Most common positive and negative words
-
-bing_word_counts <- tidy_books %>%
-  inner_join(get_sentiments("bing")) %>%
-  count(word, sentiment, sort = TRUE) %>%
+book_words <- austen_books() %>%
+  unnest_tokens(word, text) %>%
+  count(book, word, sort = TRUE) %>%
   ungroup()
 
-bing_word_counts
+total_words <- book_words %>% 
+  group_by(book) %>% 
+  summarize(total = sum(n))
 
-bing_word_counts %>%
-  group_by(sentiment) %>%
-  top_n(10) %>%
-  mutate(word = reorder(word, n)) %>%
-  ggplot(aes(word, n, fill = sentiment)) +
-  geom_bar(stat = "identity", show.legend = FALSE) +
-  facet_wrap(~sentiment, scales = "free_y") +
-  labs(y = "Contribution to sentiment",
-       x = NULL) +
+book_words <- left_join(book_words, total_words)
+
+book_words
+
+
+
+ggplot(book_words, aes(n/total, fill = book)) +
+  geom_histogram(show.legend = FALSE) +
+  xlim(NA, 0.0009) +
+  facet_wrap(~book, ncol = 2, scales = "free_y")
+
+
+###4.2 Zipf's law
+freq_by_rank <- book_words %>% 
+  group_by(book) %>% 
+  mutate(rank = row_number(), 
+         `term frequency` = n/total)
+
+freq_by_rank
+
+freq_by_rank %>% 
+  ggplot(aes(rank, `term frequency`, color = book)) + 
+  geom_line(size = 1.2, alpha = 0.8) + 
+  scale_x_log10() +
+  scale_y_log10()
+
+rank_subset <- freq_by_rank %>% 
+  filter(rank < 500,
+         rank > 10)
+
+lm(log10(`term frequency`) ~ log10(rank), data = rank_subset)
+
+freq_by_rank %>% 
+  ggplot(aes(rank, `term frequency`, color = book)) + 
+  geom_abline(intercept = -0.62, slope = -1.1, color = "gray50", linetype = 2) +
+  geom_line(size = 1.2, alpha = 0.8) + 
+  scale_x_log10() +
+  scale_y_log10()
+
+###4.3 The bind_tf_idf function
+
+book_words <- book_words %>%
+  bind_tf_idf(word, book, n)
+book_words
+
+book_words %>%
+  select(-total) %>%
+  arrange(desc(tf_idf))
+
+plot_austen <- book_words %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word))))
+
+ggplot(plot_austen[1:20,], aes(word, tf_idf, fill = book)) +
+  geom_bar(stat = "identity") +
+  labs(x = NULL, y = "tf-idf") +
   coord_flip()
 
-###3.5 Wordclouds
-
-
-tidy_books %>%
-  anti_join(stop_words) %>%
-  count(word) %>%
-  with(wordcloud(word, n, max.words = 100))
-
-
-
-tidy_books %>%
-  inner_join(get_sentiments("bing")) %>%
-  count(word, sentiment, sort = TRUE) %>%
-  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
-  comparison.cloud(colors = c("#F8766D", "#00BFC4"),
-                   max.words = 100)
-
-
-PandP_sentences <- data_frame(text = prideprejudice) %>% 
-  unnest_tokens(sentence, text, token = "sentences")
-
-austen_chapters <- austen_books() %>%
-  group_by(book) %>%
-  unnest_tokens(chapter, text, token = "regex", 
-                pattern = "Chapter|CHAPTER [\\dIVXLC]") %>%
-  ungroup()
-
-austen_chapters %>% 
+plot_austen <- plot_austen %>% 
   group_by(book) %>% 
-  summarise(chapters = n())
+  top_n(15) %>% 
+  ungroup
 
-bingnegative <- get_sentiments("bing") %>% 
-  filter(sentiment == "negative")
+ggplot(plot_austen, aes(word, tf_idf, fill = book)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~book, ncol = 2, scales = "free") +
+  coord_flip()
 
-wordcounts <- tidy_books %>%
-  group_by(book, chapter) %>%
-  summarize(words = n())
+###4.4 A corpus of physics texts
 
-tidy_books %>%
-  semi_join(bingnegative) %>%
-  group_by(book, chapter) %>%
-  summarize(negativewords = n()) %>%
-  left_join(wordcounts, by = c("book", "chapter")) %>%
-  mutate(ratio = negativewords/words) %>%
-  filter(chapter != 0) %>%
-  top_n(1) %>%
+library(gutenbergr)
+physics <- gutenberg_download(c(37729, 14725, 13476, 5001), meta_fields = "author")
+
+
+physics_words <- physics %>%
+  unnest_tokens(word, text) %>%
+  count(author, word, sort = TRUE) %>%
   ungroup()
 
+physics_words
 
+physics_words <- physics_words %>%
+  bind_tf_idf(word, author, n) 
 
+plot_physics <- physics_words %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  mutate(author = factor(author, levels = c("Galilei, Galileo",
+                                            "Huygens, Christiaan", 
+                                            "Tesla, Nikola",
+                                            "Einstein, Albert")))
 
+ggplot(plot_physics[1:20,], aes(word, tf_idf, fill = author)) +
+  geom_bar(stat = "identity") +
+  labs(x = NULL, y = "tf-idf") +
+  coord_flip()
 
+plot_physics <- plot_physics %>% 
+  group_by(author) %>% 
+  top_n(15, tf_idf) %>% 
+  mutate(word = reorder(word, tf_idf))
 
+ggplot(plot_physics, aes(word, tf_idf, fill = author)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~author, ncol = 2, scales = "free") +
+  coord_flip()
 
+mystopwords <- data_frame(word = c("eq", "co", "rc", "ac", "ak", "bn", 
+                                   "fig", "file", "cg", "cb", "cm"))
+physics_words <- anti_join(physics_words, mystopwords, by = "word")
+plot_physics <- physics_words %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  group_by(author) %>% 
+  top_n(15, tf_idf) %>%
+  ungroup %>%
+  mutate(author = factor(author, levels = c("Galilei, Galileo",
+                                            "Huygens, Christiaan",
+                                            "Tesla, Nikola",
+                                            "Einstein, Albert")))
 
-
-
-
-
-
-
+ggplot(plot_physics, aes(word, tf_idf, fill = author)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~author, ncol = 2, scales = "free") +
+  coord_flip()
 
 
 
