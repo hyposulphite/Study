@@ -3,9 +3,11 @@ library(tidytext)
 library(janeaustenr)
 library(stringr)
 library(ggplot2)
+library(tidyr)
+library(scales)
 
 ###########################
-### Chapter 2
+### Chapter 1
 text <- c("Because I could not stop for Death -",
           "He kindly stopped for me -",
           "The Carriage held but just Ourselves -",
@@ -13,44 +15,40 @@ text <- c("Because I could not stop for Death -",
 
 text
 
+#?# create text_df: line=line number and text=text
 text_df <- data_frame(line = 1:4, text = text)
-
 text_df
 
+#?# create text_df_tidy: one word per row
 text_df_tidy = text_df %>%  unnest_tokens(word, text)
-
 text_df_tidy
 
 
-# book of Jane Austen
+## 1.3 Tidying the works of Jane Austen
+
+#_# create original_books from austen_books(): text, book, linenumber, chapter
 original_books <- austen_books() %>%
   group_by(book) %>%
   mutate(linenumber = row_number(),
-         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
-                                                 ignore_case = TRUE)))) %>%
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", ignore_case = TRUE)))) %>%
   ungroup()
 
 original_books
 
-
+#?# create tidy_books: one word per row
 tidy_books <- original_books %>%
   unnest_tokens(word, text)
-
 tidy_books
 
-# remove stop words
+#?# create tidy_books: remove stop words
 data(stop_words)
-
 tidy_books <- tidy_books %>%
   anti_join(stop_words)
 
-# count words
+#?# count words and sort
+tidy_books %>% count(word, sort = TRUE) 
 
-tidy_books %>%
-  count(word, sort = TRUE) 
-
-
-# plot word count
+#?# plot word count
 tidy_books %>%
   count(word, sort = TRUE) %>%
   filter(n > 600) %>%
@@ -61,17 +59,14 @@ tidy_books %>%
   coord_flip()
 
 
-### 2.4 Word Frequency
+### 1.4 Word Frequency
 
-#Cannot download files. Adhoc solution only
-source("~/R/study/TM/all_funcs.R")
-
+#?# from gutenbergr, download c(35,36,5230,159). Use mirror = "http://mirrors.xmission.com/gutenberg/"
 library(gutenbergr)
 
-#hgwells <- gutenberg_download(c(35, 36, 5230, 159))
+hgwells <- gutenberg_download(c(35, 36, 5230, 159), mirror = "http://mirrors.xmission.com/gutenberg/")
 
-hgwells = my_file_gen("balen10")["text"]
-
+#?# create tidy_hgwells: remove stop words and count words
 tidy_hgwells <- hgwells %>%
   unnest_tokens(word, text) %>%
   anti_join(stop_words)
@@ -79,9 +74,10 @@ tidy_hgwells <- hgwells %>%
 tidy_hgwells %>%
   count(word, sort = TRUE)
 
-#bronte <- gutenberg_download(c(1260, 768, 969, 9182, 766))
-bronte = my_file_gen("comed10", file_num_limit = 10)["text"]
+#_#
+bronte <- gutenberg_download(c(1260, 768, 969, 9182, 766), mirror = "http://mirrors.xmission.com/gutenberg/")
 
+#?# create tidy_bronte: remove stop words and count words
 tidy_bronte <- bronte %>%
   unnest_tokens(word, text) %>%
   anti_join(stop_words)
@@ -89,26 +85,22 @@ tidy_bronte <- bronte %>%
 tidy_bronte %>%
   count(word, sort = TRUE)
 
-tidy_both <- bind_rows(
-  mutate(tidy_bronte, author = "Bront? Sisters"),
-  mutate(tidy_hgwells, author = "H.G. Wells"))
 
-austen_percent <- tidy_books %>%
-  mutate(word = str_extract(word, "[a-z']+")) %>%
-  count(word) %>%
-  transmute(word, austen = n / sum(n)) %>% 
-  filter(!is.na(word))
-
-frequency <- tidy_both %>%
+#?# combine tidy_bronte, tidy_hgwells, tidy_books and get word frequency.
+frequency <- bind_rows(mutate(tidy_bronte, author = "Bronte Sisters"),
+                       mutate(tidy_hgwells, author = "H.G. Wells"), 
+                       mutate(tidy_books, author = "Jane Austen")) %>% 
   mutate(word = str_extract(word, "[a-z']+")) %>%
   count(author, word) %>%
-  mutate(other = n / sum(n)) %>%
-  left_join(austen_percent) %>%
-  ungroup()
+  group_by(author) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(author, proportion) %>% 
+  gather(author, proportion, `Bronte Sisters`:`H.G. Wells`)
 
-library(scales)
 
-ggplot(frequency, aes(x = other, y = austen, color = abs(austen - other))) +
+#?# ggplot word frequency: Bronte vs JaneAusten, H.G. Wells vs JaneAusten
+ggplot(frequency, aes(x = proportion, y = `Jane Austen`, color = abs(`Jane Austen` - proportion))) +
   geom_abline(color = "gray40", lty = 2) +
   geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
   geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
@@ -119,6 +111,8 @@ ggplot(frequency, aes(x = other, y = austen, color = abs(austen - other))) +
   theme(legend.position="none") +
   labs(y = "Jane Austen", x = NULL)
 
-cor.test(data = frequency[frequency$author == "Bront? Sisters",], ~ other + austen)
+cor.test(data = frequency[frequency$author == "Brontë Sisters",],
+         ~ proportion + `Jane Austen`)
 
-cor.test(data = frequency[frequency$author == "H.G. Wells",], ~ other + austen)
+cor.test(data = frequency[frequency$author == "H.G. Wells",], 
+         ~ proportion + `Jane Austen`)
