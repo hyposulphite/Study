@@ -1,29 +1,38 @@
-##5.1 Tokenizing by n-gram
 
 library(dplyr)
 library(tidytext)
 library(janeaustenr)
 library(tidyr)
+library(igraph)
+library(ggraph)
+library(gutenbergr)
+library(stringr)
+library(widyr)
 
+
+###4.1 Tokenizing by n-gram
+
+#?# create austen_bigrams: tokenized by bigram
 austen_bigrams <- austen_books() %>%
   unnest_tokens(bigram, text, token = "ngrams", n = 2)
 
 austen_bigrams
 
-#5.1.1 Counting and filtering n-grams
-
+###4.1.1 Counting and filtering n-grams
+#?# austen_bigrams count words
 austen_bigrams %>% count(bigram, sort = TRUE)
 
-
-
+#?# create bigrams_separated: austen_bigrams separated bigrams
 bigrams_separated <- austen_bigrams %>%
   separate(bigram, c("word1", "word2"), sep = " ")
 
+#?# create bigrams_filtered: bigrams_separated neither words in stop_words
+#?#   1. Create bigrams_counts as count from bigrams_filtered
+#?#   2. Also count and unite the bigrams
 bigrams_filtered <- bigrams_separated %>%
   filter(!word1 %in% stop_words$word) %>%
   filter(!word2 %in% stop_words$word)
 
-# new bigram counts:
 bigram_counts <- bigrams_filtered %>% 
   count(word1, word2, sort = TRUE)
 
@@ -34,7 +43,7 @@ bigrams_united <- bigrams_filtered %>%
 
 bigrams_united
 
-
+#?# word count by trigram
 austen_books() %>%
   unnest_tokens(trigram, text, token = "ngrams", n = 3) %>%
   separate(trigram, c("word1", "word2", "word3"), sep = " ") %>%
@@ -43,7 +52,8 @@ austen_books() %>%
          !word3 %in% stop_words$word) %>%
   count(word1, word2, word3, sort = TRUE)
 
-#5.1.2 Analyzing bigrams
+###4.1.2 Analyzing bigrams
+#?# from bigrams_filtered, create tf_idf for XX street, and plot
 bigrams_filtered %>%
   filter(word2 == "street") %>%
   count(book, word1, sort = TRUE)
@@ -55,7 +65,9 @@ bigram_tf_idf <- bigrams_united %>%
 
 bigram_tf_idf
 
-#5.1.3 Using bigrams to provide context in sentiment analysis
+###4.1.3 Using bigrams to provide context in sentiment analysis
+#?# Plot The most common positive or negative words to follow negations 
+#?#   such as ‘never’, ‘no’, ‘not’, and ‘without’, by negation words
 bigrams_separated %>%
   filter(word1 == "not") %>%
   count(word1, word2, sort = TRUE)
@@ -91,20 +103,20 @@ negated_words <- bigrams_separated %>%
   count(word1, word2, score, sort = TRUE) %>%
   ungroup()
 
-#5.1.4 Visualizing a network of bigrams with igraph
-library(igraph)
+
+###4.1.4 Visualizing a network of bigrams with igraph
+#?# This section: check original code and study
 
 # original counts
 bigram_counts
 
-# filter for only relatively common combinations
+#?# Get bigram_graph object from bigram_counts with top 20 words
 bigram_graph <- bigram_counts %>%
   filter(n > 20) %>%
   graph_from_data_frame()
 
 bigram_graph
 
-library(ggraph)
 set.seed(2017)
 
 ggraph(bigram_graph, layout = "fr") +
@@ -148,9 +160,9 @@ visualize_bigrams <- function(bigrams) {
 }
 
 # the King James version is book 10 on Project Gutenberg:
-library(gutenbergr)
+
 kjv <- gutenberg_download(10)
-library(stringr)
+
 
 kjv_bigrams <- kjv %>%
   count_bigrams()
@@ -162,8 +174,11 @@ kjv_bigrams %>%
          !str_detect(word2, "\\d")) %>%
   visualize_bigrams()
 
-###5.2 Counting and correlating pairs of words with the widyr package
-#5.2.1 Counting and correlating among sections
+###4.2 Counting and correlating pairs of words with the widyr package
+###4.2.1 Counting and correlating among sections
+
+#?# create austen_section_words: austen_books filtered by "Pride & Prejudice"
+#?#   section=10 rows block and filter out stopwords
 austen_section_words <- austen_books() %>%
   filter(book == "Pride & Prejudice") %>%
   mutate(section = row_number() %/% 10) %>%
@@ -173,9 +188,8 @@ austen_section_words <- austen_books() %>%
 
 austen_section_words
 
-library(widyr)
 
-# count words co-occuring within sections
+#?# create word_pairs: count words co-occuring within sections
 word_pairs <- austen_section_words %>%
   pairwise_count(word, section, sort = TRUE)
 
@@ -184,10 +198,11 @@ word_pairs
 word_pairs %>%
   filter(item1 == "darcy")
 
-#5.2.2 Pairwise correlation
-library(widyr)
+###4.2.2 Pairwise correlation
 
-# we need to filter for at least relatively common words first
+
+#?# create word_cors: from austen_section_words,
+#?#   filter common words (count>20) and get pairwise correlation
 word_cors <- austen_section_words %>%
   group_by(word) %>%
   filter(n() >= 20) %>%
@@ -198,6 +213,7 @@ word_cors
 word_cors %>%
   filter(item1 == "pounds")
 
+#?# plot words having highest correlation with ("elizabeth", "pounds", "married", "pride")
 word_cors %>%
   filter(item1 %in% c("elizabeth", "pounds", "married", "pride")) %>%
   group_by(item1) %>%
