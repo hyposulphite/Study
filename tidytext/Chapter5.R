@@ -9,31 +9,27 @@ library(janeaustenr)
 library(tm.plugin.webmining)
 library(purrr)
 
-#5.1 Tidying a document-term matrix
-#5.1.1 Tidying DocumentTermMatrix objects
-#Get data AssociatedPress from "topicmodels"
+###5.1 Tidying a document-term matrix
+###5.1.1 Tidying DocumentTermMatrix objects
+
+#?# Get data AssociatedPress from "topicmodels"
 data("AssociatedPress", package = "topicmodels")
 AssociatedPress
 
-#Access terms of the document
+#?# Create terms: terms of the document
 terms <- Terms(AssociatedPress)
 head(terms)
 
-#transform matrix into one-token-per-document-per-row format
-
-
+#?# Create ap_td: Transform AssociatedPress into one-token-per-document-per-row format
 ap_td <- tidy(AssociatedPress)
 ap_td
 
-#conduct sentiment analysis
+#?# conduct sentiment analysis using "bing"
 ap_sentiments <- ap_td %>%
   inner_join(get_sentiments("bing"), by = c(term = "word"))
-
 ap_sentiments
 
-#Visualize most positive and most negative words
-
-
+#?# Visualize most positive and most negative words
 ap_sentiments %>%
   count(sentiment, term, wt = count) %>%
   ungroup() %>%
@@ -45,31 +41,31 @@ ap_sentiments %>%
   ylab("Contribution to sentiment") +
   coord_flip()
 
-#5.1.2 Tidying dfm objects
 
-
-
-#get data data_corpus_inaugural from <quanteda>
+###5.1.2 Tidying dfm objects
+#?# get data data_corpus_inaugural from <quanteda>
+#?# create inaug_dfm: use quanteda::dfm
 data("data_corpus_inaugural", package = "quanteda")
 inaug_dfm <- quanteda::dfm(data_corpus_inaugural)
 inaug_dfm
 
-#transform dfm into tidy text
+#?# create inaug_td: transform dfm into tidy text
 inaug_td <- tidy(inaug_dfm)
 inaug_td
 
-#get tf_idf
+#?# create inaug_tf_idf: get tf_idf
 inaug_tf_idf <- inaug_td %>%
   bind_tf_idf(term, document, count) %>%
   arrange(desc(tf_idf))
 
 inaug_tf_idf
 
-#pick several words and visualize how they changed in frequency over time
-
+#?# pick several words and visualize how they changed in frequency over time
+#?#   words: ("god", "america", "foreign", "union", "constitution", "freedom")
 
 year_term_counts <- inaug_td %>%
-  extract(document, "year", "(\\d+)", convert = TRUE) %>%
+  # extract(document, "year", "(\\d+)", convert = TRUE) %>%
+  mutate(year=str_extract(document, "(\\d+)")) %>% 
   complete(year, term, fill = list(count = 0)) %>%
   group_by(year) %>%
   mutate(year_total = sum(count))
@@ -84,22 +80,22 @@ year_term_counts %>%
   ylab("% frequency of word in inaugural address")
 
 
-##5.2
-# cast tidy data [ap_td] into dtm/dfm
+###5.2 Casting tidy text data into a matrix
+#?# cast tidy data [ap_td] into dtm/dfm
 ap_td %>%
   cast_dtm(document, term, count)
 ap_td %>%
   cast_dfm(term, document, count)
 
 
-# cast into a Matrix object
+#?# cast ap_td into a Matrix object
 m <- ap_td %>%
   cast_sparse(document, term, count)
 class(m)
 dim(m)
 
-# cast austen_books from <janeaustenr> into dtm
 
+# cast austen_books from <janeaustenr> into austen_dtm
 
 austen_dtm <- austen_books() %>%
   unnest_tokens(word, text) %>%
@@ -109,35 +105,36 @@ austen_dtm <- austen_books() %>%
 austen_dtm
 
 
-##5.3 Tidying corpus objects with metadata
-# get corpus "acq" from <tm>
+###5.3 Tidying corpus objects with metadata
+#?# get corpus "acq" from <tm>
 data("acq")
 acq
 acq[[1]]
 
-# tidy acq
+#?# create acq_td: tidy acq
 acq_td <- tidy(acq)
 acq_td
 
-# tokenize column "text"
+#?# create acq_tokens: tokenize acq_td column "text", remove places and remove stop words
 acq_tokens <- acq_td %>%
   select(-places) %>%
   unnest_tokens(word, text) %>%
   anti_join(stop_words, by = "word")
 
-# most common words
+#?# most common words
 acq_tokens %>%
   count(word, sort = TRUE)
 
-# tf-idf
+#?# tf-idf
 acq_tokens %>%
   count(id, word) %>%
   bind_tf_idf(word, id, n) %>%
   arrange(desc(tf_idf))
 
-##5.3.1 Example: mining financial articles
 
+###5.3.1 Example: mining financial articles
 
+#_# create symbol list
 company <- c("Microsoft", "Apple", "Google", "Amazon", "Facebook",
              "Twitter", "IBM", "Yahoo", "Netflix")
 symbol <- c("MSFT", "AAPL", "GOOG", "AMZN", "FB", "TWTR", "IBM", "YHOO", "NFLX")
@@ -146,15 +143,15 @@ download_articles <- function(symbol) {
   WebCorpus(GoogleFinanceSource(paste0("NASDAQ:", symbol)))
 }
 
-#get all articles. One corpus per row
+#?# Create stock_articles: Get all articles. One corpus per row
 stock_articles <- data_frame(company = company,
                              symbol = symbol) %>%
   mutate(corpus = map(symbol, download_articles))
 
 stock_articles
 
-#get all words from each corpus
-# select: company, datetimestamp, word, id, heading
+#?# create stock_tokens: get all words from each corpus
+#?#  select: company, datetimestamp, word, id, heading
 stock_tokens <- stock_articles %>%
   unnest(map(corpus, tidy)) %>%
   unnest_tokens(word, text) %>%
@@ -162,17 +159,17 @@ stock_tokens <- stock_articles %>%
 
 stock_tokens
 
-#get tf_idf by company
+#?# create stock_tf_idf: get tf_idf by company
 stock_tf_idf <- stock_tokens %>%
   count(company, word) %>%
   filter(!str_detect(word, "\\d+")) %>%
   bind_tf_idf(word, company, n) %>%
   arrange(-tf_idf)
-# and try to plot the words by company, ordered by tf_idf
+#?# and try to plot the words by company, ordered by tf_idf
 
 
-#sentiment analysis: get strongest words from stock_tokens
-# sentiment: afinn
+#?# sentiment analysis: get strongest words from stock_tokens
+#?#  sentiment: afinn
 stock_tokens %>%
   anti_join(stop_words, by = "word") %>%
   count(word, id, sort = TRUE) %>%
@@ -188,7 +185,7 @@ stock_tokens %>%
   labs(y = "Frequency of word * AFINN score")
 
 
-#sentiment: loughran
+#?# sentiment: loughran
 stock_tokens %>%
   count(word) %>%
   inner_join(get_sentiments("loughran"), by = "word") %>%
@@ -202,6 +199,8 @@ stock_tokens %>%
   facet_wrap(~ sentiment, scales = "free") +
   ylab("Frequency of this word in the recent financial articles")
 
+
+#?# spread sentiment count table: company by sentiment type
 
 stock_sentiment_count <- stock_tokens %>%
   inner_join(get_sentiments("loughran"), by = "word") %>%
