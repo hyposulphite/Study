@@ -7,26 +7,26 @@ library(stringr)
 library(tidyr)
 library(scales)
 
-#get data AssociatedPress
+#?# get data AssociatedPress
 data("AssociatedPress")
 AssociatedPress
 
-#conduct LDA with k=2
+#?# create ap_lda: conduct LDA with k=2
 ap_lda <- LDA(AssociatedPress, k = 2, control = list(seed = 1234))
 ap_lda
 
-#tidy LDA object
+#?# create ap_topics: tidy beta matrix
 ap_topics <- tidy(ap_lda, matrix = "beta")
 ap_topics
 
-#get top 10 words that define the two topics
+#?# create ap_top_terms: get top 10 words that define the two topics
 ap_top_terms <- ap_topics %>%
   group_by(topic) %>%
   top_n(10, beta) %>%
   ungroup() %>%
   arrange(topic, -beta)
 
-#plot the words
+#?# plot the words
 ap_top_terms %>%
   mutate(term = reorder(term, beta)) %>%
   ggplot(aes(term, beta, fill = factor(topic))) +
@@ -34,9 +34,8 @@ ap_top_terms %>%
   facet_wrap(~ topic, scales = "free") +
   coord_flip()
 
-#find words making greatest difference between topic1 and topic2
-
-
+#?# find words making greatest difference between topic1 and topic2
+#?#   difference defined as log2(topic2/topic1)
 beta_spread <- ap_topics %>%
   mutate(topic = paste0("topic", topic)) %>%
   spread(topic, beta) %>%
@@ -54,36 +53,29 @@ rbind(beta_spread %>% top_n(10, log_ratio),
   coord_flip()
 
 
-#6.1.2
-#get tidy version of gamma matrix: per-document-per-topic probability
+### 6.1.2 Document-topic probabilities
+#?# create ap_documents: from ap_lda get tidy version of gamma matrix 
+#?#   gamma matrix: per-document-per-topic probability
 ap_documents <- tidy(ap_lda, matrix = "gamma")
 ap_documents
 
-#check why document 6 has high topic 2 probability
+#?# check why document 6 has high topic 2 probability
 tidy(AssociatedPress) %>%
   filter(document == 6) %>%
   arrange(desc(count))
 
 
 
-###6.2
+### 6.2 Example: the great library heist
+#_# titles:
 titles <- c("Twenty Thousand Leagues under the Sea", "The War of the Worlds",
             "Pride and Prejudice", "Great Expectations")
 
-
-#########
-#download has some issue
-#https://github.com/ropenscilabs/gutenbergr/issues/8
-
+#?# create books: download from gutenberg:
 books <- gutenberg_works(title %in% titles) %>%
-  gutenberg_download(meta_fields = "title"
-                     , mirror = "http://mirrors.xmission.com/gutenberg/")
+  gutenberg_download(meta_fields = "title")
 
-#########
-
-
-
-# divide into documents, each representing one chapter
+#?# create by_chapter: divide into documents, each representing one chapter
 by_chapter <- books %>%
   group_by(title) %>%
   mutate(chapter = cumsum(str_detect(text, regex("^chapter ", ignore_case = TRUE)))) %>%
@@ -91,11 +83,11 @@ by_chapter <- books %>%
   filter(chapter > 0) %>%
   unite(document, title, chapter)
 
-# split into words
+#?# create by_chapter_word: split into words
 by_chapter_word <- by_chapter %>%
   unnest_tokens(word, text)
 
-# find document-word counts
+#?# create word_counts: word counts
 word_counts <- by_chapter_word %>%
   anti_join(stop_words) %>%
   count(document, word, sort = TRUE) %>%
@@ -103,22 +95,22 @@ word_counts <- by_chapter_word %>%
 
 word_counts
 
-#6.2.1 LDA on chapters
-#get dtm
+### 6.2.1 LDA on chapters
+#?# create chapters_dtm: get dtm from word_counts
 chapters_dtm <- word_counts %>%
   cast_dtm(document, word, n)
 
 chapters_dtm
 
-#LDA with k=4
+#?# create chapters_lda: LDA with k=4
 chapters_lda <- LDA(chapters_dtm, k = 4, control = list(seed = 1234))
 chapters_lda
 
-#pull out beta matrix for the topics
+#?# create chapter_topics: pull out beta matrix for the topics
 chapter_topics <- tidy(chapters_lda, matrix = "beta")
 chapter_topics
 
-#get top 5 terms by topics
+#?# get top 5 terms by topics and plot
 top_terms <- chapter_topics %>%
   group_by(topic) %>%
   top_n(5, beta) %>%
@@ -127,8 +119,6 @@ top_terms <- chapter_topics %>%
 
 top_terms
 
-
-#plot
 top_terms %>%
   mutate(term = reorder(term, beta)) %>%
   ggplot(aes(term, beta, fill = factor(topic))) +
@@ -137,12 +127,12 @@ top_terms %>%
   coord_flip()
 
 
-#6.2.2 Per-document classification
-#pull out gamm matrix
+### 6.2.2 Per-document classification
+#?# create chapters_gamma: pull out gamm matrix
 chapters_gamma <- tidy(chapters_lda, matrix = "gamma")
 chapters_gamma
 
-#summarize gamma by book and topic and do classification
+#?# summarize gamma by book and topic and do classification
 chapters_gamma <- chapters_gamma %>%
   separate(document, c("title", "chapter"), sep = "_", convert = TRUE)
 chapters_gamma
@@ -153,7 +143,7 @@ chapters_gamma %>%
   geom_boxplot() +
   facet_wrap(~ title)
 
-#check the cases of misclassification
+#?# check the cases of misclassification
 chapter_classifications <- chapters_gamma %>%
   group_by(title, chapter) %>%
   top_n(1, gamma) %>%
@@ -172,20 +162,21 @@ chapter_classifications %>%
   inner_join(book_topics, by = "topic") %>%
   filter(title != consensus)
 
-##6.2.3 By word assignments: augment
 
-#assign words in chapters_lda into each topic
+###6.2.3 By word assignments: augment
+
+#?# create assignments: assign words in chapters_lda into each topic
 assignments <- augment(chapters_lda, data = chapters_dtm)
 assignments
 
-#check correctness of assignments
+#?# update assignments: check correctness of assignments
 assignments <- assignments %>%
   separate(document, c("title", "chapter"), sep = "_", convert = TRUE) %>%
   inner_join(book_topics, by = c(".topic" = "topic"))
 
 assignments
 
-#plot confusion matrix: how often the misclassification
+#?# plot confusion matrix: how often the misclassification
 assignments %>%
   count(title, consensus, wt = count) %>%
   group_by(title) %>%
@@ -200,8 +191,8 @@ assignments %>%
        y = "Book words came from",
        fill = "% of assignments")
 
-#research on the wrong words
 
+#?# research on the wrong words
 wrong_words <- assignments %>%
   filter(title != consensus)
 
@@ -212,8 +203,6 @@ wrong_words %>%
 
 word_counts %>%
   filter(word == "flopson")
-
-
 wrong_words
 
 ###6.3 Alternative LDA implementations
