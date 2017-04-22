@@ -31,6 +31,9 @@ library(scales)
 #?# check why document 6 has high topic 2 probability
 
 ### 6.2 Example: the great library heist
+#_# titles:
+titles <- c("Twenty Thousand Leagues under the Sea", "The War of the Worlds",
+            "Pride and Prejudice", "Great Expectations")
 
 #?# create books: download from gutenberg:
 

@@ -142,6 +142,7 @@ symbol <- c("MSFT", "AAPL", "GOOG", "AMZN", "FB", "TWTR", "IBM", "YHOO", "NFLX")
 download_articles <- function(symbol) {
   WebCorpus(GoogleFinanceSource(paste0("NASDAQ:", symbol)))
 }
+#__#
 
 #?# Create stock_articles: Get all articles. One corpus per row
 stock_articles <- data_frame(company = company,

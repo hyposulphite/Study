@@ -8,12 +8,16 @@ library(scales)
 
 ###########################
 ### Chapter 1
+
+#_#
 text <- c("Because I could not stop for Death -",
           "He kindly stopped for me -",
           "The Carriage held but just Ourselves -",
           "and Immortality")
+#__#
 
 text
+
 
 #?# create text_df: line=line number and text=text
 text_df <- data_frame(line = 1:4, text = text)
@@ -32,6 +36,7 @@ original_books <- austen_books() %>%
   mutate(linenumber = row_number(),
          chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", ignore_case = TRUE)))) %>%
   ungroup()
+#__#
 
 original_books
 
@@ -75,7 +80,8 @@ tidy_hgwells %>%
   count(word, sort = TRUE)
 
 #_#
-bronte <- gutenberg_download(c(1260, 768, 969, 9182, 766), mirror = "http://mirrors.xmission.com/gutenberg/")
+bronte <- gutenberg_download(c(1260, 768, 969, 9182, 766))
+#__#
 
 #?# create tidy_bronte: remove stop words and count words
 tidy_bronte <- bronte %>%

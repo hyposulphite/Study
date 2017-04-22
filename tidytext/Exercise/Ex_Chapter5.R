@@ -57,6 +57,13 @@ library(purrr)
 #?# tf-idf
 
 ###5.3.1 Example: mining financial articles
+#_# create symbol list
+company <- c("Microsoft", "Apple", "Google", "Amazon", "Facebook",
+             "Twitter", "IBM", "Yahoo", "Netflix")
+symbol <- c("MSFT", "AAPL", "GOOG", "AMZN", "FB", "TWTR", "IBM", "YHOO", "NFLX")
+download_articles <- function(symbol) {
+  WebCorpus(GoogleFinanceSource(paste0("NASDAQ:", symbol)))
+}
 
 #?# Create stock_articles: Get all articles. One corpus per row
 

@@ -70,6 +70,7 @@ tidy(AssociatedPress) %>%
 #_# titles:
 titles <- c("Twenty Thousand Leagues under the Sea", "The War of the Worlds",
             "Pride and Prejudice", "Great Expectations")
+#__#
 
 #?# create books: download from gutenberg:
 books <- gutenberg_works(title %in% titles) %>%
