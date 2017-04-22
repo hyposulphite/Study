@@ -1,19 +1,11 @@
 
-
 library(topicmodels)
-
 library(tidytext)
-
 library(ggplot2)
-
 library(dplyr)
-
 library(gutenbergr)
-
 library(stringr)
-
 library(tidyr)
-
 library(scales)
 
 #?# get data AssociatedPress
@@ -77,5 +69,4 @@ library(scales)
 #?# research on the wrong words
 
 ###6.3 Alternative LDA implementations
-
 library(mallet)

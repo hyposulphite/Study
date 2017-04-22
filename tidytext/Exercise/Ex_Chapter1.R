@@ -1,17 +1,10 @@
 
-
 library(dplyr)
-
 library(tidytext)
-
 library(janeaustenr)
-
 library(stringr)
-
 library(ggplot2)
-
 library(tidyr)
-
 library(scales)
 
 ###########################
@@ -33,7 +26,6 @@ library(scales)
 ### 1.4 Word Frequency
 
 #?# from gutenbergr, download c(35,36,5230,159). Use mirror = "http://mirrors.xmission.com/gutenberg/"
-
 library(gutenbergr)
 
 #?# create tidy_hgwells: remove stop words and count words

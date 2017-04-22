@@ -1,13 +1,8 @@
 
-
 library(dplyr)
-
 library(janeaustenr)
-
 library(tidytext)
-
 library(ggplot2)
-
 library(gutenbergr)
 
 ###3.1 Term frequency in Jane Austen’s novels

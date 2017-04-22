@@ -1,23 +1,13 @@
 
-
 library(tm)
-
 library(dplyr)
-
 library(tidytext)
-
 library(ggplot2)
-
 library(methods)
-
 library(tidyr)
-
 library(stringr)
-
 library(janeaustenr)
-
 library(tm.plugin.webmining)
-
 library(purrr)
 
 ###5.1 Tidying a document-term matrix

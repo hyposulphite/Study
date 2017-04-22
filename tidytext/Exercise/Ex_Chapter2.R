@@ -1,19 +1,11 @@
 
-
 library(dplyr)
-
 library(tidytext)
-
 library(janeaustenr)
-
 library(stringr)
-
 library(ggplot2)
-
 library(tidyr)
-
 library(wordcloud)
-
 library(reshape2)
 
 ###########################

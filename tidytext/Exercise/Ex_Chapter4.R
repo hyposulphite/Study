@@ -1,21 +1,12 @@
 
-
 library(dplyr)
-
 library(tidytext)
-
 library(janeaustenr)
-
 library(tidyr)
-
 library(igraph)
-
 library(ggraph)
-
 library(gutenbergr)
-
 library(stringr)
-
 library(widyr)
 
 ###4.1 Tokenizing by n-gram
