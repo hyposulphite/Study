@@ -69,6 +69,37 @@ tidy_bronte <- bronte %>%
 
 tidy_bronte %>% count(word, sort=TRUE)
 
-#?# combine tidy_bronte, tidy_hgwells, tidy_books and get word frequency.
+#?# combine tidy_bronte, tidy_hgwells, tidy_books and get word proportion.
+frequency <- bind_rows(tidy_bronte %>% select(word) %>% mutate(author="Bronte")
+          , tidy_hgwells %>% select(word) %>% mutate(author="Wells")
+          , tidy_books %>% select(word) %>% mutate(author="Austen")
+) %>% 
+  mutate(word=str_extract(word, "[a-z']+")) %>% 
+  count(word, author) %>% 
+  group_by(author) %>% 
+  mutate(proportion = n/sum(n)) %>% 
+  select(-n) %>% 
+  spread(author, proportion, fill=NA) %>% 
+  gather(author, proportion, Bronte:Wells)
+
 
 #?# ggplot word frequency: Bronte vs JaneAusten, H.G. Wells vs JaneAusten
+ggplot(frequency, aes(x=Austen, y=proportion)) +
+  geom_text(aes(label=word)) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  facet_wrap(~author)
+
+ggplot(frequency, aes(x = proportion, y = Austen, color = abs(Austen - proportion))) +
+  geom_abline(color = "gray40", lty = 2) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75") +
+  facet_wrap(~author, ncol = 2) +
+  theme(legend.position="none") +
+  labs(y = "Jane Austen", x = NULL)
+
+
+
