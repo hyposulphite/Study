@@ -13,10 +13,25 @@ library(reshape2)
 ### Chapter 2
 
 #?# print sentiments files: afinn, bing and nrc
+sentiments
+sentiments %>% count(lexicon)
+sentiments %>% group_by(lexicon) %>% count(sentiment)
+sentiments %>% group_by(lexicon) %>% count(score)
+
+get_sentiments("afinn")
+get_sentiments("bing")
+get_sentiments("nrc")
 
 ###2.2 Sentiment analysis with inner join
 
 #?# get tidy_books from austen_books: add linenumber and chapter number
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", 
+                                                 ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
 
 #?# get Emma book from tidy_books, and check words in joy sentiment
 
