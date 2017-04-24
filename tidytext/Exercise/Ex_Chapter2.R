@@ -34,10 +34,38 @@ tidy_books <- austen_books() %>%
   unnest_tokens(word, text)
 
 #?# get Emma book from tidy_books, and check words in joy sentiment
+tidy_books %>% 
+  filter(book=="Emma") %>% 
+  inner_join(get_sentiments("nrc") %>% filter(sentiment=="joy")) %>% 
+  count(word, sort=TRUE)
 
 #?# get positive and negative index of the tidy_books, by blocks of 80 lines
+bing_sent <- get_sentiments("bing")
+
+word_cnt <- tidy_books %>% 
+  group_by(book) %>% 
+  mutate(block=linenumber %/% 80) %>% 
+  count(book, block) %>% 
+  rename(all_word_cnt=n)
+
+sent_summ = tidy_books %>% 
+  group_by(book) %>% 
+  mutate(block=linenumber %/% 80) %>% 
+  inner_join(bing_sent) %>% 
+  count(block, sentiment) %>% 
+  ungroup() %>% 
+  spread(sentiment, n, fill=0) %>%
+  mutate(score=positive-negative) %>% 
+  left_join(word_cnt) %>% 
+  mutate(proportion=score/all_word_cnt)
 
 #?# plot overall sentiment index by book and block
+sent_summ %>% 
+  ggplot(aes(x=block, y=proportion, fill=book)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+
+
 
 ###2.3 Comparing the three sentiment dictionaries
 
