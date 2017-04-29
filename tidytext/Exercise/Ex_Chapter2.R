@@ -70,12 +70,43 @@ sent_summ %>%
 ###2.3 Comparing the three sentiment dictionaries
 
 #?# create pride_prejudice: "Pride & Prejudice" in tidy_books
+pride_prejudice = tidy_books %>% filter(book=="Pride & Prejudice")
 
 #?# create afinn: index=block number, sentiment index and method="AFINN"
+afinn = pride_prejudice %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  mutate(index = linenumber %/% 80) %>% 
+  group_by(index) %>% 
+  summarise(sentiments=sum(score)) %>% 
+  ungroup() %>% 
+  mutate(method = "AFINN")
 
 #?# pride_prejudice "bing" and "nrc" positive and negative summary by block
+bing = pride_prejudice %>% 
+  inner_join(get_sentiments("bing")) %>% 
+  group_by(index=linenumber %/% 80) %>% 
+  count(index, sentiment) %>%
+  ungroup() %>% 
+  mutate(method="BING") %>% 
+  spread(key=sentiment, value=n, fill=0)
+
+nrc = pride_prejudice %>% 
+  inner_join(get_sentiments("nrc") %>% filter(sentiment %in% c("negative","positive"))) %>% 
+  group_by(index=linenumber %/% 80) %>% 
+  count(index, sentiment) %>% 
+  ungroup() %>% 
+  mutate(method="NRC") %>% 
+  spread(key=sentiment, value=n, fill=0)
 
 #?# plot afinn, bing and nrc scores
+all_scores = bind_rows(afinn %>% select(index, method, score=sentiments),
+                       bing %>% mutate(score=positive-negative) %>% select(index, method, score),
+                       nrc %>% mutate(score=positive-negative) %>% select(index, method, score))
+
+all_scores %>% 
+  ggplot(aes(x=index, y=score, fill=method)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~method, ncol=1, scales="free_y")
 
 ###2.4 Most common positive and negative words
 
