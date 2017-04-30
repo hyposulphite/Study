@@ -109,8 +109,38 @@ all_scores %>%
   facet_wrap(~method, ncol=1, scales="free_y")
 
 ###2.4 Most common positive and negative words
-
 #?# tidy_books join "bing" plot most common positive and negative words
+word_sentiment_afinn = 
+  pride_prejudice %>% 
+    inner_join(get_sentiments("afinn")) %>% 
+    group_by(word) %>% 
+    summarise(score=sum(score)) %>% 
+    mutate(sentiment=ifelse(score>0, "positive","negative"), score=abs(score))
+
+word_sentiment_bing = 
+  pride_prejudice %>% 
+    inner_join(get_sentiments("bing")) %>% 
+    count(word, sentiment) %>% 
+    rename(score=n)
+
+word_sentiment_nrc = 
+  pride_prejudice %>% 
+    inner_join(get_sentiments("nrc") %>% filter(sentiment %in% c("positive","negative"))) %>% 
+    count(word, sentiment) %>% 
+    rename(score=n)
+
+
+word_sentiment_afinn %>%
+  group_by(sentiment) %>% 
+  top_n(n=10, wt=score) %>% 
+  mutate(word=reorder(word,score)) %>% 
+  ggplot(aes(x=word, y=score, fill=sentiment)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~sentiment, scales = "free_y") +
+  coord_flip()
+
+
+
 
 ###2.5 Wordclouds
 
