@@ -145,13 +145,63 @@ word_sentiment_afinn %>%
 ###2.5 Wordclouds
 
 #?# plot word cloud for the top 100 words
+pride_prejudice %>% 
+  count(word, sort=TRUE) %>%
+  anti_join(stop_words) %>% 
+  filter(row_number() <= 100) %>% 
+  with(wordcloud(words=word, freq=n))
 
 #?# comparison word cloud 
-
-#?## colors = c("#F8766D", "#00BFC4")
+#?## 
+tidy_books %>%
+  inner_join(get_sentiments("nrc") %>% filter(sentiment %in% c("positive","negative"))) %>% 
+  count(word, sentiment, sort=TRUE) %>% 
+  acast(word~sentiment, value.var="n", fill=0) %>% 
+  comparison.cloud(colors = c("#F8766D", "#00BFC4"), max.words=100)
+  
+tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+                   max.words = 100)
 
 #?# create PandP_sentences: prideprejudice one sentence per row
+PandP_sentences = data_frame(text=prideprejudice) %>% 
+  unnest_tokens(sentence, text, token="sentences")
 
 #?# create austen_chapters: austen_books one chapter per row
+austen_chapters <- austen_books() %>%
+  group_by(book) %>%
+  unnest_tokens(chapter, text, token = "regex", 
+                pattern = "Chapter|CHAPTER [\\dIVXLC]") %>%
+  ungroup() %>% 
+  group_by(book) %>% 
+  mutate(ind=row_number()) %>% 
+  ungroup()
 
 #?# get the chapter for each book with the highest ratio of negative words/words
+austen_chapters_words = austen_chapters %>% 
+  unnest_tokens(word, chapter)
+
+austen_word_counts = austen_chapters_words %>% 
+  count(book, ind)
+
+austen_chapters_neg_ratio = austen_chapters_words %>% 
+  inner_join(get_sentiments("bing") %>% filter(sentiment=="negative")) %>% 
+  count(book, ind) %>% 
+  rename(neg_n=n) %>% 
+  inner_join(austen_word_counts) %>% 
+  mutate(neg_ratio = neg_n/n) %>% 
+  filter(ind>1)
+
+austen_chapters_neg_ratio %>% 
+  ggplot(aes(x=ind, y=neg_ratio, fill=book)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~book, ncol=1, scales="free")
+
+austen_chapters_neg_ratio %>% 
+  group_by(book) %>% 
+  top_n(n=1, wt=neg_ratio) %>% 
+  ungroup()
+  
