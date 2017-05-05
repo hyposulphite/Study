@@ -53,7 +53,7 @@ austen_books() %>%
   count(word1, word2, word3, sort = TRUE)
 
 ###4.1.2 Analyzing bigrams
-#?# from bigrams_filtered, create tf_idf for XX street, and plot
+#?# from bigrams_filtered, check word count for XX street, create tf_idf, and plot
 bigrams_filtered %>%
   filter(word2 == "street") %>%
   count(book, word1, sort = TRUE)
@@ -137,6 +137,7 @@ ggraph(bigram_graph, layout = "fr") +
 
 
 ###
+#!# important functions to summarize bigrams
 count_bigrams <- function(dataset) {
   dataset %>%
     unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
