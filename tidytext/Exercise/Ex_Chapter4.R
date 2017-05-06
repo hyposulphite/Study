@@ -73,9 +73,19 @@ bigrams_separated %>%
 
 ###4.1.4 Visualizing a network of bigrams with igraph
 #?# This section: check original code and study
+bigrams_counts
+
+bigrams_graph = bigrams_counts %>% 
+  ungroup() %>% 
+  top_n(60, n) %>% 
+  graph_from_data_frame()
+
+ggraph(bigrams_graph, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
 
 
-#?# Get bigram_graph object from bigram_counts with top 20 words
 
 
 ###
@@ -83,14 +93,23 @@ bigrams_separated %>%
 ###4.2 Counting and correlating pairs of words with the widyr package
 ###4.2.1 Counting and correlating among sections
 #?# create austen_section_words: austen_books filtered by "Pride & Prejudice"
-
 #?#   section=10 rows block and filter out stopwords
+austen_section_words = austen_books() %>% 
+  unnest_tokens(word, text) %>% 
+  filter(book=="Pride & Prejudice") %>% 
+  mutate(section = row_number() %/% 10) %>% 
+  anti_join(stop_words)
 
 #?# create word_pairs: count words co-occuring within sections
+word_pairs = austen_section_words %>% 
+  pairwise_count(word, section, sort=TRUE)
 
 ###4.2.2 Pairwise correlation
 #?# create word_cors: from austen_section_words,
-
 #?#   filter common words (count>20) and get pairwise correlation
+word_cors <- austen_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 20) %>%
+  pairwise_cor(word, section, sort = TRUE)
 
 #?# plot words having highest correlation with ("elizabeth", "pounds", "married", "pride")
