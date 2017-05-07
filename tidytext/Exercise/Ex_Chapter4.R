@@ -113,3 +113,14 @@ word_cors <- austen_section_words %>%
   pairwise_cor(word, section, sort = TRUE)
 
 #?# plot words having highest correlation with ("elizabeth", "pounds", "married", "pride")
+word_cors %>% 
+  filter(item1 %in% c("elizabeth", "pounds", "married", "pride")) %>% 
+  group_by(item1) %>% 
+  top_n(n=5, wt=correlation) %>% 
+  ungroup() %>% 
+  mutate(item2=reorder(item2, correlation)) %>% 
+  ggplot(aes(x=item2, y=correlation, fill=item1)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~item1, scale="free") +
+  coord_flip()
+
