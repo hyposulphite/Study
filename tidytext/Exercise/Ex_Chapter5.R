@@ -46,16 +46,36 @@ data(data_corpus_inaugural, package="quanteda")
 inaug_dfm = quanteda::dfm(data_corpus_inaugural)
 
 #?# create inaug_td: transform dfm into tidy text
+inaug_td = tidy(inaug_dfm)
 
 #?# create inaug_tf_idf: get tf_idf
+inaug_tf_idf = inaug_td %>% 
+  bind_tf_idf(term, document, count)
 
 #?# pick several words and visualize how they changed in frequency over time
 #?#   words: ("god", "america", "foreign", "union", "constitution", "freedom")
+inaug_tf_idf %>% 
+  separate(document, c("year","name"), sep="-") %>% 
+  filter(term %in% c("god", "america", "foreign", "union", "constitution", "freedom")) %>% 
+  complete(year, term, fill=list(count=0)) %>% 
+  group_by(term) %>% 
+  mutate(year_total = sum(count)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=year, y=count/year_total)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~term, scale="free")
 
 ###5.2 Casting tidy text data into a matrix
 #?# cast tidy data [ap_td] into dtm/dfm
+ap_td %>% 
+  cast_dtm(document, term, count)
+ap_td %>% 
+  cast_dfm(document, term, count)
 
 #?# cast ap_td into a Matrix object
+m = ap_td %>% 
+  cast_sparse(document, term, count)
 
 ###5.3 Tidying corpus objects with metadata
 #?# get corpus "acq" from <tm>
