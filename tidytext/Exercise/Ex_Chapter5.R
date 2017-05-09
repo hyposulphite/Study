@@ -79,14 +79,26 @@ m = ap_td %>%
 
 ###5.3 Tidying corpus objects with metadata
 #?# get corpus "acq" from <tm>
+data("acq", package="tm")
 
 #?# create acq_td: tidy acq
+acq_td = tidy(acq)
+acq_td
 
 #?# create acq_tokens: tokenize acq_td column "text", remove places and remove stop words
-
+acq_tokens = acq_td %>% 
+  select(-places) %>% 
+  unnest_tokens(word, text, token="words") %>% 
+  anti_join(stop_words, by="word")
+  
 #?# most common words
+acq_tokens %>% count(word, sort=TRUE)
 
 #?# tf-idf
+acq_tokens %>% 
+  count(id, word) %>% 
+  bind_tf_idf(word, id, n) %>% 
+  arrange(-tf_idf)
 
 ###5.3.1 Example: mining financial articles
 #_# create symbol list
@@ -98,16 +110,50 @@ download_articles <- function(symbol) {
 }
 
 #?# Create stock_articles: Get all articles. One corpus per row
+stock_articles = data_frame(company=company, symbol=symbol) %>% 
+  mutate(corpus = map(symbol, download_articles))
 
 #?# create stock_tokens: get all words from each corpus
 #?#  select: company, datetimestamp, word, id, heading
+stock_tokens = stock_articles %>% 
+  unnest(map(corpus, tidy)) %>% 
+  unnest_tokens(word, text) %>% 
+  select(company, datetimestamp, word, id, heading)
 
 #?# create stock_tf_idf: get tf_idf by company
-
 #?# and try to plot the words by company, ordered by tf_idf
+stock_tf_idf = stock_tokens %>% 
+  group_by(company) %>% 
+  count(company, word, sort=TRUE) %>% 
+  bind_tf_idf(word, company, n) %>% 
+  arrange(-tf_idf) %>% 
+  ungroup()
+
+stock_tf_idf %>% 
+  group_by(company) %>% 
+  top_n(10,tf_idf) %>% 
+  ungroup() %>% 
+  mutate(word=reorder(word, tf_idf)) %>% 
+  ggplot(aes(word, tf_idf, fill=company)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~company, scale="free") +
+  coord_flip()
 
 #?# sentiment analysis: get strongest words from stock_tokens
 #?#  sentiment: afinn
+stock_tf_idf %>% 
+  anti_join(stop_words) %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  mutate(total_score = score*n) %>% 
+  group_by(company) %>% 
+  top_n(10, abs(total_score)) %>% 
+  ungroup() %>% 
+  mutate(word=reorder(word, abs(total_score))) %>% 
+  ggplot(aes(word, total_score, fill=company)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~company, scale="free") +
+  coord_flip()
+  
 
 #?# sentiment: loughran
 
