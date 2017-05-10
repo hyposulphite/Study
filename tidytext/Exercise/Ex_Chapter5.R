@@ -156,7 +156,29 @@ stock_tf_idf %>%
   
 
 #?# sentiment: loughran
+# replace get_sentiments()
+lsent = read.csv("./tidytext/loughran.csv") %>% as_data_frame()
+stock_tokens %>% 
+  anti_join(stop_words) %>% 
+  inner_join(lsent) %>% 
+  count(word, sentiment, sort=TRUE) %>% 
+  group_by(sentiment) %>% 
+  top_n(5, n) %>% 
+  ungroup() %>% 
+  mutate(word=reorder(word, n)) %>% 
+  ggplot(aes(word, n, fill=sentiment)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~sentiment, scale="free") +
+  coord_flip()
 
 #?# spread sentiment count table: company by sentiment type
 
+stock_sentiment_count <- stock_tokens %>%
+  inner_join(lsent, by = "word") %>%
+  count(sentiment, company) %>%
+  spread(sentiment, n, fill = 0)
+
 ###
+
+
+

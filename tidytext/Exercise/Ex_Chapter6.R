@@ -9,14 +9,28 @@ library(tidyr)
 library(scales)
 
 #?# get data AssociatedPress
+data(AssociatedPress)
 
 #?# create ap_lda: conduct LDA with k=2
+ap_lda = LDA(AssociatedPress, k=2, control=list(seed=1234))
 
 #?# create ap_topics: tidy beta matrix
+ap_topics = tidy(ap_lda, matrix="beta")
 
 #?# create ap_top_terms: get top 10 words that define the two topics
+ap_top_terms = ap_topics %>% 
+  group_by(topic) %>% 
+  top_n(10, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta)
 
 #?# plot the words
+ap_top_terms %>% 
+  mutate(term=reorder(term, beta)) %>% 
+  ggplot(aes(term, beta, fill=as.factor(topic))) +
+  geom_bar(stat="identity") +
+  facet_wrap(~topic, scale="free") +
+  coord_flip()
 
 #?# find words making greatest difference between topic1 and topic2
 
