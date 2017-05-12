@@ -86,28 +86,73 @@ word_counts = by_chapter_word %>%
 word_counts
 
 ### 6.2.1 LDA on chapters
-
 #?# create chapters_dtm: get dtm from word_counts
+chapters_dtm = word_counts %>% 
+  cast_dtm(document, word, n)
 
 #?# create chapters_lda: LDA with k=4
+chapters_lda = LDA(chapters_dtm, k=4, control=list(seed=1234))
+chapters_lda
 
 #?# create chapter_topics: pull out beta matrix for the topics
+chapter_topics = tidy(chapters_lda, matrix="beta")
 
 #?# get top 5 terms by topics and plot
+chapter_topics %>% 
+  group_by(topic) %>% 
+  top_n(5, beta) %>% 
+  ungroup() %>% 
+  arrange(topic, -beta) %>% 
+  mutate(term=reorder(term, beta), topic=as.factor(topic)) %>% 
+  ggplot(aes(term, beta, fill=topic)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~topic, scale="free") +
+  coord_flip()
 
 ### 6.2.2 Per-document classification
-
-#?# create chapters_gamma: pull out gamm matrix
+#?# create chapters_gamma: pull out gamma matrix
+chapters_gamma = tidy(chapters_lda, matrix="gamma")
+chapters_gamma
 
 #?# summarize gamma by book and topic and do classification
+chapters_gamma = chapters_gamma %>% 
+  separate(document, c("book", "chapter"), sep="_")
+
+chapters_gamma %>% 
+  group_by(book, chapter) %>% 
+  top_n(1, gamma) %>% 
+  ungroup() %>% 
+  mutate(chapter=as.numeric(chapter), topic=as.factor(topic)) %>% 
+  ggplot(aes(chapter, gamma, fill=topic)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~book, scale="free")
 
 #?# check the cases of misclassification
+chapter_classifications <- chapters_gamma %>%
+  group_by(book, chapter) %>%
+  top_n(1, gamma) %>%
+  ungroup()
+
+chapter_classifications
+
+book_topics <- chapter_classifications %>%
+  count(book, topic) %>%
+  group_by(book) %>%
+  top_n(1, n) %>%
+  ungroup() %>%
+  transmute(consensus = book, topic)
+
+chapter_classifications %>%
+  inner_join(book_topics, by = "topic") %>%
+  filter(book != consensus)
 
 ###6.2.3 By word assignments: augment
-
 #?# create assignments: assign words in chapters_lda into each topic
+assignments <- augment(chapters_lda, data = chapters_dtm)
+assignments
 
 #?# update assignments: check correctness of assignments
+
 
 #?# plot confusion matrix: how often the misclassification
 
